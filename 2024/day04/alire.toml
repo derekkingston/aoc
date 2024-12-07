@@ -1,0 +1,12 @@
+name = "day04"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Derek Kingston"]
+maintainers = ["Derek Kingston <derek.kingston@gmail.com>"]
+maintainers-logins = ["derekkingston"]
+licenses = "MIT"
+website = ""
+tags = []
+
+executables = ["day04"]
