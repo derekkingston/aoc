@@ -43,6 +43,19 @@ procedure day06 with SPARK_Mode is
       return 0;
    end Index_Of;
 
+   function Index_Of (A : Location_Array; Row, Col : Natural) return Natural is
+      Value : Location;
+   begin
+      Value.Row := Row;
+      Value.Col := Col;
+      for I in A'Range loop
+         if A (I) = Value then
+            return I;
+         end if;
+      end loop;
+      return 0;
+   end Index_Of;
+
    function Index_Of (A : Pose_Array; Value : Pose) return Natural is
    begin
       for I in A'Range loop
@@ -64,11 +77,6 @@ procedure day06 with SPARK_Mode is
    function Is_On_Map (L : Location) return Boolean is
    begin
       return Is_On_Map (L.Row, L.Col);
-   end Is_On_Map;
-
-   function Is_On_Map (P : Pose) return Boolean is
-   begin
-      return Is_On_Map (P.Loc.Row, P.Loc.Col);
    end Is_On_Map;
 
    function Is_Facing_Obstacle (P : Pose) return Boolean is
@@ -102,20 +110,24 @@ procedure day06 with SPARK_Mode is
       return False;
    end Is_Facing_Obstacle;
 
-   function Walk_Map (P0 : Pose) return Boolean is
+   function Walk_Map (P0 : Pose; Part_B : Boolean) return Boolean is
       P : Pose := P0;
    begin
       --  initialize
-      Visited_Len := 0;
+      if not Part_B then
+         Visited_Len := 0;
+      end if;
       Trace_Len := 0;
       --  loop until walked of the map or returned to a pose
       while Is_On_Map (P.Loc) loop
-         --  update visited list if not already visited
-         if Visited_Len = 0 or else
-            Index_Of (Visited (1 .. Visited_Len), P.Loc) = 0
-         then
-            Visited_Len := Visited_Len + 1;
-            Visited (Visited_Len) := P.Loc;
+         if not Part_B then
+            --  update visited list if not already visited
+            if Visited_Len = 0 or else
+               Index_Of (Visited (1 .. Visited_Len), P.Loc) = 0
+            then
+               Visited_Len := Visited_Len + 1;
+               Visited (Visited_Len) := P.Loc;
+            end if;
          end if;
          --  update trace list, checking for returning to a pose from earlier
          if Trace_Len = 0 or else
@@ -186,20 +198,20 @@ begin
    Close (File);
 
    --  Part A: count locations visited
-   if not Walk_Map (Start_Pose) then
+   if not Walk_Map (Start_Pose, False) then
       Put_Line ("Part A: " & Natural'Image (Visited_Len));
    end if;
 
-   --  Part B: count obstacles placed to get loop
-   --  This is pure brute force, could likely get it much
-   --  faster if we only placed obstacles on locations
-   --  visited in the original walk
+   --  Part B: count obstacles placed to get loop checking only those
+   --  locations on the 'visited' path from part A
    for I in 1 .. Row_Len loop
-      -- Put_Line ("Working row: " & Natural'Image (I));
+      --  Put_Line ("Working row: " & Natural'Image (I));
       for J in 1 .. Col_Len loop
-         if Puzzle (I) (J) = '.' then
+         if Puzzle (I) (J) = '.' and then
+           Index_Of (Visited (1 .. Visited_Len), I, J) /= 0
+         then
             Puzzle (I) (J) := '#';
-            if Walk_Map (Start_Pose) then
+            if Walk_Map (Start_Pose, True) then
                Num_Loops := Num_Loops + 1;
             end if;
             Puzzle (I) (J) := '.';
