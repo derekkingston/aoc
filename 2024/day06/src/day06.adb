@@ -48,12 +48,7 @@ procedure day06 with SPARK_Mode is
    begin
       Value.Row := Row;
       Value.Col := Col;
-      for I in A'Range loop
-         if A (I) = Value then
-            return I;
-         end if;
-      end loop;
-      return 0;
+      return Index_Of (A, Value);
    end Index_Of;
 
    function Index_Of (A : Pose_Array; Value : Pose) return Natural is
@@ -208,7 +203,7 @@ begin
       --  Put_Line ("Working row: " & Natural'Image (I));
       for J in 1 .. Col_Len loop
          if Puzzle (I) (J) = '.' and then
-           Index_Of (Visited (1 .. Visited_Len), I, J) /= 0
+            Index_Of (Visited (1 .. Visited_Len), I, J) /= 0
          then
             Puzzle (I) (J) := '#';
             if Walk_Map (Start_Pose, True) then
