@@ -1,5 +1,6 @@
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Containers.Bounded_Ordered_Sets;
 
 procedure day16 with SPARK_Mode is
    PUZZLE_SIZE : constant Natural := 142;
@@ -14,6 +15,32 @@ procedure day16 with SPARK_Mode is
       Col : Integer;
       Dir : Direction;
    end record;
+   type Location is record
+      Row : Integer;
+      Col : Integer;
+   end record;
+   function Location_Less (Left, Right : Location) return Boolean is
+   begin
+      --  lexicographical ordering
+      if Left.Row < Right.Row then
+         return True;
+      end if;
+      if Left.Row > Right.Row then
+         return False;
+      end if;
+      return Left.Col < Right.Col;
+   end Location_Less;
+   function Location_Eq (Left, Right : Location) return Boolean is
+   begin
+      if Left.Row = Right.Row and then Left.Col = Right.Col then
+         return True;
+      end if;
+      return False;
+   end Location_Eq;
+   package Location_Sets is new Ada.Containers.Bounded_Ordered_Sets
+     (Element_Type => Location,
+      "<" => Location_Less,
+      "=" => Location_Eq);
 
    File_Name    : constant String := "input.txt";
    File         : File_Type;
@@ -26,6 +53,8 @@ procedure day16 with SPARK_Mode is
    Start_Idx    : Natural := 0;
    Reindeer     : Pose;
    Min_Cost     : Natural := Natural'Last;
+   Good_Seat    : Boolean;
+   Seats        : Location_Sets.Set (2500);
 
    procedure Clear_Cost_Map is
    begin
@@ -38,15 +67,16 @@ procedure day16 with SPARK_Mode is
       end loop;
    end Clear_Cost_Map;
 
-   --  should probably just use Dijkstra; full depth first search instead
-   procedure FindMinPath (P : Pose; Cost : Natural) is
+   --  full depth first search
+   function FindMinPath (P : Pose; Cost : Natural) return Boolean is
       R : Pose;
+      Good : Boolean := False;
    begin
       --  Put_Line ("At (" & P.Row'Image & ", " & P.Col'Image
       --     & ", " & P.Dir'Image & ")");
       --  base case: already has lower cost
       if Cost_Map (P.Row) (P.Col) (P.Dir) < Cost then
-         return;
+         return False;
       end if;
 
       --  base case: reached end, update min cost
@@ -55,12 +85,17 @@ procedure day16 with SPARK_Mode is
          if Cost < Min_Cost then
             Min_Cost := Cost;
          end if;
-         return;
+         --  for part B, Min_Cost already set, check if this path matches
+         if Cost = Min_Cost then
+            Seats.Include ((Row => P.Row, Col => P.Col));
+            return True;
+         end if;
+         return False;
       end if;
 
       --  base case: hit obstacle
       if Puzzle (P.Row) (P.Col) = '#' then
-         return;
+         return False;
       end if;
 
       --  mark cost along this path
@@ -72,13 +107,13 @@ procedure day16 with SPARK_Mode is
       R.Dir := North;
       case P.Dir is
          when North =>
-            FindMinPath (R, Cost + 1);
+            Good := FindMinPath (R, Cost + 1) or else Good;
          when East =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
          when South =>
             null;  --  don't go backwards
          when West =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
       end case;
 
       --  recurse each direction (East)
@@ -87,11 +122,11 @@ procedure day16 with SPARK_Mode is
       R.Dir := East;
       case P.Dir is
          when North =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
          when East =>
-            FindMinPath (R, Cost + 1);
+            Good := FindMinPath (R, Cost + 1) or else Good;
          when South =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
          when West =>
             null;  --  don't go backwards
       end case;
@@ -104,11 +139,11 @@ procedure day16 with SPARK_Mode is
          when North =>
             null;  --  don't go backwards
          when East =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
          when South =>
-            FindMinPath (R, Cost + 1);
+            Good := FindMinPath (R, Cost + 1) or else Good;
          when West =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
       end case;
 
       --  recurse each direction (West)
@@ -117,14 +152,19 @@ procedure day16 with SPARK_Mode is
       R.Dir := West;
       case P.Dir is
          when North =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
          when East =>
             null;  --  don't go backwards
          when South =>
-            FindMinPath (R, Cost + 1001);
+            Good := FindMinPath (R, Cost + 1001) or else Good;
          when West =>
-            FindMinPath (R, Cost + 1);
+            Good := FindMinPath (R, Cost + 1) or else Good;
       end case;
+
+      if Good then
+         Seats.Include ((Row => P.Row, Col => P.Col));
+      end if;
+      return Good;
    end FindMinPath;
 
 begin
@@ -156,8 +196,15 @@ begin
    --  Close the file
    Close (File);
 
+   Seats.Clear;
    Clear_Cost_Map;
-   FindMinPath (Reindeer, 0);
+   Good_Seat := FindMinPath (Reindeer, 0);
    Put_Line ("Part A: " & Min_Cost'Image);
+
+   --  run again, notice that this time min_cost remains as from part A
+   Seats.Clear;
+   Clear_Cost_Map;
+   Good_Seat := FindMinPath (Reindeer, 0);
+   Put_Line ("Part B: " & Seats.Length'Image);
 
 end day16;
