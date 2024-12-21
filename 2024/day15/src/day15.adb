@@ -1,5 +1,6 @@
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Containers.Bounded_Ordered_Sets;
 
 procedure day15 is
    type String_List is array (Positive range <>) of String (1 .. 1024);
@@ -10,6 +11,31 @@ procedure day15 is
       Col : Integer;
    end record;
 
+   function Location_Less (Left, Right : Location) return Boolean is
+   begin
+      --  lexicographical ordering
+      if Left.Row < Right.Row then
+         return True;
+      end if;
+      if Left.Row > Right.Row then
+         return False;
+      end if;
+      return Left.Col < Right.Col;
+   end Location_Less;
+
+   function Location_Eq (Left, Right : Location) return Boolean is
+   begin
+      if Left.Row = Right.Row and then Left.Col = Right.Col then
+         return True;
+      end if;
+      return False;
+   end Location_Eq;
+
+   package Location_Sets is new Ada.Containers.Bounded_Ordered_Sets
+     (Element_Type => Location,
+      "<" => Location_Less,
+      "=" => Location_Eq);
+
    File_Name     : constant String := "input.txt";
    File          : File_Type;
    Line          : String (1 .. 1024);
@@ -17,7 +43,7 @@ procedure day15 is
    Wall_Idx      : Natural;
    PuzzleA       : String_List (1 .. 1024);
    PuzzleB       : String_List (1 .. 1024);
-   Puzzle_Temp   : String_List (1 .. 1024);
+   Boxes         : Location_Sets.Set (2500);
    Row_Len       : Natural := 0;
    Col_Len       : Natural := 0;
    Robot_Idx     : Natural;
@@ -26,6 +52,13 @@ procedure day15 is
    RobotA        : Location;
    RobotB        : Location;
    Map_Score     : Natural;
+
+   Puzzle_Save   : String_List (1 .. 1024);
+   Num_Wall      : Natural;
+   Num_Left_Box  : Natural;
+   Num_Right_Box : Natural;
+   Robot_Prev    : Location;
+   Cmd_Prev      : Direction;
 
    procedure Copy_Puzzle (A : in out String_List; B : String_List) is
    begin
@@ -37,12 +70,82 @@ procedure day15 is
    end Copy_Puzzle;
 
    procedure Show_Puzzle (A : String_List) is
+      S : String (1 .. 2 * Col_Len);
    begin
       for R in 1 .. Row_Len loop
-         Put_Line (A (R) (1 .. 2 * Col_Len));
+         S := A (R) (1 .. 2 * Col_Len);
+         if R = RobotB.Row then
+            S (RobotB.Col) := '@';
+         end if;
+         Put_Line (S);
       end loop;
       New_Line;
    end Show_Puzzle;
+
+   function Count_Character (Ch : Character) return Natural is
+      Count : Natural := 0;
+   begin
+      for R in 1 .. Row_Len loop
+         for C in 1 .. 2 * Col_Len loop
+            if PuzzleB (R) (C) = Ch then
+               Count := Count + 1;
+            end if;
+         end loop;
+      end loop;
+      return Count;
+   end Count_Character;
+
+   procedure Save_Point (Dir : Direction) is
+   begin
+      Copy_Puzzle (Puzzle_Save, PuzzleB);
+      Num_Wall := Count_Character ('#');
+      Num_Left_Box := Count_Character ('[');
+      Num_Right_Box := Count_Character (']');
+      Robot_Prev := RobotB;
+      Cmd_Prev := Dir;
+   end Save_Point;
+
+   procedure Check_Point is
+      W, L, R : Natural;
+      Sv_Robot : Location;
+   begin
+      W := Count_Character ('#');
+      L := Count_Character ('[');
+      R := Count_Character (']');
+      if W /= Num_Wall or else
+         L /= Num_Left_Box or else
+         R /= Num_Right_Box
+      then
+         Sv_Robot := RobotB;
+         Put_Line ("Checkpoint failed going " & Cmd_Prev'Image);
+         RobotB := Robot_Prev;
+         Show_Puzzle (Puzzle_Save);
+         New_Line;
+         RobotB := Sv_Robot;
+         Show_Puzzle (PuzzleB);
+         Get_Line (Line, Line_Last);
+      end if;
+   end Check_Point;
+
+   procedure Move_Boxes (Dir : Direction) is
+      DR : Integer := 0;
+      DC : Integer := 0;
+   begin
+      case Dir is
+         when North => DR := -1;
+         when East =>  DC :=  1;
+         when South => DR :=  1;
+         when West =>  DC := -1;
+      end case;
+      for B in Boxes.Iterate loop
+         PuzzleB (Boxes.Element (B).Row) (Boxes.Element (B).Col) := '.';
+         PuzzleB (Boxes.Element (B).Row) (Boxes.Element (B).Col + 1) := '.';
+      end loop;
+      for B in Boxes.Iterate loop
+         PuzzleB (Boxes.Element (B).Row + DR) (Boxes.Element (B).Col + DC) := '[';
+         PuzzleB (Boxes.Element (B).Row + DR) (Boxes.Element (B).Col + DC + 1) := ']';
+      end loop;
+   end Move_Boxes;
 
    procedure Move_RobotA (Dir : Direction) is
       X : Natural;
@@ -164,7 +267,6 @@ procedure day15 is
    end sign;
 
    function Try_Push_Vertical (DR, DC : Integer) return Boolean is
-      S : Boolean;
    begin
       --  base case: immediately below is '#'
       if PuzzleB (RobotB.Row + DR) (RobotB.Col + DC) = '#' then
@@ -176,90 +278,51 @@ procedure day15 is
       end if;
       --  recursively add lower boxes
       if PuzzleB (RobotB.Row + DR) (RobotB.Col + DC) = '[' then
-         S := Try_Push_Vertical (DR + sign (DR), DC) and then
+         Boxes.Include ((Row => RobotB.Row + DR, Col => RobotB.Col + DC));
+         return Try_Push_Vertical (DR + sign (DR), DC) and then
             Try_Push_Vertical (DR + sign (DR), DC + 1);
-         Puzzle_Temp (RobotB.Row + DR) (RobotB.Col + DC) := '.';
-         Puzzle_Temp (RobotB.Row + DR) (RobotB.Col + DC + 1) := '.';
-         Puzzle_Temp (RobotB.Row + DR + sign (DR)) (RobotB.Col + DC) := '[';
-         Puzzle_Temp (RobotB.Row + DR + sign (DR)) (RobotB.Col + DC + 1) := ']';
-         return S;
       else
-         S := Try_Push_Vertical (DR + sign (DR), DC - 1) and then
+         Boxes.Include ((Row => RobotB.Row + DR, Col => RobotB.Col + DC - 1));
+         return Try_Push_Vertical (DR + sign (DR), DC - 1) and then
             Try_Push_Vertical (DR + sign (DR), DC);
-         Puzzle_Temp (RobotB.Row + DR) (RobotB.Col + DC - 1) := '.';
-         Puzzle_Temp (RobotB.Row + DR) (RobotB.Col + DC) := '.';
-         Puzzle_Temp (RobotB.Row + DR + sign (DR)) (RobotB.Col + DC - 1) := '[';
-         Puzzle_Temp (RobotB.Row + DR + sign (DR)) (RobotB.Col + DC) := ']';
-         return S;
       end if;
    end Try_Push_Vertical;
 
    function Try_Push (Dir : Direction) return Boolean is
       X : Natural;
-      S : Boolean;
    begin
       case Dir is
          when North =>
-            if PuzzleB (RobotB.Row - 1) (RobotB.Col) = '[' then
-               S := Try_Push_Vertical (-1, 0) and then
-                  Try_Push_Vertical (-1, 1);
-               Puzzle_Temp (RobotB.Row - 1) (RobotB.Col) := '.';
-               Puzzle_Temp (RobotB.Row - 1) (RobotB.Col + 1) := '.';
-               Puzzle_Temp (RobotB.Row - 2) (RobotB.Col) := '[';
-               Puzzle_Temp (RobotB.Row - 2) (RobotB.Col + 1) := ']';
-               return S;
-            else
-               S := Try_Push_Vertical (-1, -1) and then
-                  Try_Push_Vertical (-1, 0);
-               Puzzle_Temp (RobotB.Row - 1) (RobotB.Col - 1) := '.';
-               Puzzle_Temp (RobotB.Row - 1) (RobotB.Col) := '.';
-               Puzzle_Temp (RobotB.Row - 2) (RobotB.Col - 1) := '[';
-               Puzzle_Temp (RobotB.Row - 2) (RobotB.Col) := ']';
-               return S;
-            end if;
+            return Try_Push_Vertical (-1, 0);
          when East =>
             X := RobotB.Col + 1;
-            Puzzle_Temp (RobotB.Row) (X) := '.';
             while X < 2 * Col_Len loop
+               if PuzzleB (RobotB.Row) (X) = '[' then
+                  Boxes.Include ((Row => RobotB.Row, Col => X));
+               end if;
                if PuzzleB (RobotB.Row) (X) = '#' then
                   return False;
                end if;
                if PuzzleB (RobotB.Row) (X) = '.' then
                   return True;
                end if;
-               Puzzle_Temp (RobotB.Row) (X + 1) := PuzzleB (RobotB.Row) (X);
                X := X + 1;
             end loop;
             return False;
          when South =>
-            if PuzzleB (RobotB.Row + 1) (RobotB.Col) = '[' then
-               S := Try_Push_Vertical (1, 0) and then
-                  Try_Push_Vertical (1, 1);
-               Puzzle_Temp (RobotB.Row + 1) (RobotB.Col) := '.';
-               Puzzle_Temp (RobotB.Row + 1) (RobotB.Col + 1) := '.';
-               Puzzle_Temp (RobotB.Row + 2) (RobotB.Col) := '[';
-               Puzzle_Temp (RobotB.Row + 2) (RobotB.Col + 1) := ']';
-               return S;
-            else
-               S := Try_Push_Vertical (1, -1) and then
-                  Try_Push_Vertical (1, 0);
-               Puzzle_Temp (RobotB.Row + 1) (RobotB.Col - 1) := '.';
-               Puzzle_Temp (RobotB.Row + 1) (RobotB.Col) := '.';
-               Puzzle_Temp (RobotB.Row + 2) (RobotB.Col - 1) := '[';
-               Puzzle_Temp (RobotB.Row + 2) (RobotB.Col) := ']';
-               return S;
-            end if;
+            return Try_Push_Vertical (1, 0);
          when West =>
             X := RobotB.Col - 1;
-            Puzzle_Temp (RobotB.Row) (X) := '.';
             while X > 1 loop
+               if PuzzleB (RobotB.Row) (X) = '[' then
+                  Boxes.Include ((Row => RobotB.Row, Col => X));
+               end if;
                if PuzzleB (RobotB.Row) (X) = '#' then
                   return False;
                end if;
                if PuzzleB (RobotB.Row) (X) = '.' then
                   return True;
                end if;
-               Puzzle_Temp (RobotB.Row) (X - 1) := PuzzleB (RobotB.Row) (X);
                X := X - 1;
             end loop;
             return False;
@@ -267,61 +330,35 @@ procedure day15 is
    end Try_Push;
 
    procedure Move_RobotB (Dir : Direction) is
+      DR, DC : Integer;
    begin
       case Dir is
          when North =>
-            if PuzzleB (RobotB.Row - 1) (RobotB.Col) = '#' then
-               return;
-            end if;
-            if PuzzleB (RobotB.Row - 1) (RobotB.Col) = '.' then
-               RobotB.Row := RobotB.Row - 1;
-               return;
-            end if;
-            Copy_Puzzle (Puzzle_Temp, PuzzleB);
-            if Try_Push (Dir) then
-               RobotB.Row := RobotB.Row - 1;
-               Copy_Puzzle (PuzzleB, Puzzle_Temp);
-            end if;
+            DR := -1; DC :=  0;
          when East =>
-            if PuzzleB (RobotB.Row) (RobotB.Col + 1) = '#' then
-               return;
-            end if;
-            if PuzzleB (RobotB.Row) (RobotB.Col + 1) = '.' then
-               RobotB.Col := RobotB.Col + 1;
-               return;
-            end if;
-            Copy_Puzzle (Puzzle_Temp, PuzzleB);
-            if Try_Push (Dir) then
-               RobotB.Col := RobotB.Col + 1;
-               Copy_Puzzle (PuzzleB, Puzzle_Temp);
-            end if;
+            DR :=  0; DC :=  1;
          when South =>
-            if PuzzleB (RobotB.Row + 1) (RobotB.Col) = '#' then
-               return;
-            end if;
-            if PuzzleB (RobotB.Row + 1) (RobotB.Col) = '.' then
-               RobotB.Row := RobotB.Row + 1;
-               return;
-            end if;
-            Copy_Puzzle (Puzzle_Temp, PuzzleB);
-            if Try_Push (Dir) then
-               RobotB.Row := RobotB.Row + 1;
-               Copy_Puzzle (PuzzleB, Puzzle_Temp);
-            end if;
+            DR :=  1; DC :=  0;
          when West =>
-            if PuzzleB (RobotB.Row) (RobotB.Col - 1) = '#' then
-               return;
-            end if;
-            if PuzzleB (RobotB.Row) (RobotB.Col - 1) = '.' then
-               RobotB.Col := RobotB.Col - 1;
-               return;
-            end if;
-            Copy_Puzzle (Puzzle_Temp, PuzzleB);
-            if Try_Push (Dir) then
-               RobotB.Col := RobotB.Col - 1;
-               Copy_Puzzle (PuzzleB, Puzzle_Temp);
-            end if;
+            DR :=  0; DC := -1;
       end case;
+      --  case for robot pushing against wall
+      if PuzzleB (RobotB.Row + DR) (RobotB.Col + DC) = '#' then
+         return;
+      end if;
+      --  case for robot moving to open space
+      if PuzzleB (RobotB.Row + DR) (RobotB.Col + DC) = '.' then
+         RobotB.Row := RobotB.Row + DR;
+         RobotB.Col := RobotB.Col + DC;
+         return;
+      end if;
+      --  need to check if robot can push box(es)
+      Boxes.Clear;
+      if Try_Push (Dir) then
+         RobotB.Row := RobotB.Row + DR;
+         RobotB.Col := RobotB.Col + DC;
+         Move_Boxes (Dir);
+      end if;
    end Move_RobotB;
 
    function GPS_Sum_B return Natural is
@@ -412,14 +449,15 @@ begin
    Put_Line ("Part A: " & Map_Score'Image);
 
    --  count boxes and obstacles in PuzzleB
+   --  Show_Puzzle (PuzzleB);
    for I in 1 .. Cmd_Len loop
       --  Show_Puzzle (PuzzleB);
+      Save_Point (Commands (I));
       Move_RobotB (Commands (I));
+      Check_Point;
    end loop;
-   Show_Puzzle (PuzzleB);
-   --  count boxes and obstacles in PuzzleB
+   --  Show_Puzzle (PuzzleB);
    Map_Score := GPS_Sum_B;
    Put_Line ("Part B: " & Map_Score'Image);
-   --  1536776 too low
 
 end day15;
