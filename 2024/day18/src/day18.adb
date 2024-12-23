@@ -304,22 +304,30 @@ begin
    --  end if;
 
    --  solve with a-star
-   Loc.Row := 1;
-   Loc.Col := 1;
-   Path := A_Star (Loc);
+   Path := A_Star ((1, 1));
    Show_Puzzle (Path);
    Min_Cost := Integer (Path.Length) - 1;
    Put_Line (Min_Cost'Image);
 
    --  Part B: continue adding the remaining blocks until no path found
-   --  pure brute force (~30 sec total); maybe bi-section would be better?
+   --  check to see if the block is on the current shortest path
    for B of Blocks_Rem loop
-      --  Put_Line (B.Col'Image & ", " & B.Row'Image);
-      Puzzle (B.Row + 1) (B.Col + 1) := '#';
-      Path := A_Star (Loc);
-      if Path.Is_Empty then
-         Put_Line (B.Col'Image & ", " & B.Row'Image);
-         exit;
+      --  if this is just a repeat of a block already on the map, skip
+      if Puzzle (B.Row + 1) (B.Col + 1) /= '#' then
+         --  add the new block to the map
+         Puzzle (B.Row + 1) (B.Col + 1) := '#';
+         Loc.Row := B.Row + 1;
+         Loc.Col := B.Col + 1;
+         --  check to see if the new block was on shortest path
+         --  if so, recompute shortest path
+         if Path.Contains (Loc) then
+            Path := A_Star ((1, 1));
+            --  if the path was empty, then no path available, return
+            if Path.Is_Empty then
+               Put_Line (B.Col'Image & ", " & B.Row'Image);
+               exit;
+            end if;
+         end if;
       end if;
    end loop;
 
