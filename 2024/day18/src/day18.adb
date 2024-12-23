@@ -182,7 +182,6 @@ procedure day18 is
       Came_From : Location_Maps.Map;
       G_Score : Cost_Maps.Map;
       F_Score : Cost_Maps.Map;
-      CursorS : Location_Sets.Cursor;
       Min_Loc : Location;
       Min_F   : Integer;
       Loc     : Location;
@@ -205,9 +204,7 @@ procedure day18 is
 
       while not Open_Set.Is_Empty loop
          --  find element of set that has smallest F score
-         CursorS := Open_Set.First;
-         Min_Loc := Open_Set.Element (CursorS);
-         Min_F := F_Score.Element (Min_Loc);
+         Min_F := Integer'Last;
          for E of Open_Set loop
             Score := F_Score.Element (E);
             if Score < Min_F then
@@ -248,6 +245,7 @@ procedure day18 is
          end if;
 
          for E of Neighbors loop
+            --  tentative score is g-score + [weight of edge], here just 1
             Score := G_Score.Element (Min_Loc) + 1;
             if Score < G_Score.Element (E) then
                Came_From.Include (E, Min_Loc);
@@ -290,7 +288,7 @@ begin
       --  switch to 1-based indexing
       Puzzle (B.Row + 1) (B.Col + 1) := '#';
    end loop;
-   Show_Puzzle (Path);
+   --  Show_Puzzle (Path);
 
    --  --  solve with dfs
    --  Loc.Row := 1;
@@ -305,7 +303,7 @@ begin
 
    --  solve with a-star
    Path := A_Star ((1, 1));
-   Show_Puzzle (Path);
+   --  Show_Puzzle (Path);
    Min_Cost := Integer (Path.Length) - 1;
    Put_Line (Min_Cost'Image);
 
