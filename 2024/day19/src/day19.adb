@@ -6,6 +6,7 @@ with Ada.Containers.Vectors;
 with Ada.Containers.Hashed_Maps;
 
 procedure Day19 is
+   type UInt is mod 2**64;
    package String_Vec is new Ada.Containers.Vectors
       (Index_Type => Natural, Element_Type => Unbounded_String);
    
@@ -19,7 +20,7 @@ procedure Day19 is
      (Key_Type => Unbounded_String,
       Hash => Unbounded_String_Hash,
       Equivalent_Keys => "=",
-      Element_Type => Boolean);
+      Element_Type => UInt);
 
    File_Name     : constant String := "input.txt";
    File          : File_Type;
@@ -29,38 +30,37 @@ procedure Day19 is
    Comma_Idx_prv : Natural;
    Towels        : String_Vec.Vector := String_Vec.Empty_Vector;
    Designs       : String_Vec.Vector := String_Vec.Empty_Vector;
-   Possible      : Natural := 0;
+   Possible      : UInt := 0;
    Memo          : Completed_Maps.Map;
+   Arrange_Sum   : UInt := 0;
 
-   function Check_Match (S : Unbounded_String) return Boolean is
+   function Count_Match (S : Unbounded_String) return UInt is
+      Count : UInt := 0;
    begin
-      --  base case: already in completed map
+      --  base case: already in completed map (memoization)
       if Memo.Contains (S) then
          return Memo.Element (S);
       end if;
+
       --  base case: all characters removed from S, trivially matches
       if Length (S) < 1 then
-         return True;
+         return 1;
       end if;
+
       --  otherwise, try to match each design
       for T of Towels loop
          --  if the candidate towel, T, could fit at the start of the design
          --  then try to continue completing the design after removing it
          if Length (T) <= Length (S) and then Slice (S, 1, Length (T)) = T then
             --  make sure the rest of the design can be satisfied recursively
-            if Check_Match (To_Unbounded_String (
-               Slice (S, Length (T) + 1, Length (S))))
-            then
-               --  if the design is satisfied, add it to the map and return
-               Memo.Include (S, True);
-               return True;
-            end if;
+            Count := Count + Count_Match (To_Unbounded_String (
+               Slice (S, Length (T) + 1, Length (S))));
          end if;
       end loop;
-      --  no design could match, mark in the map as unsatisfiable
-      Memo.Include (S, False);
-      return False;
-   end Check_Match;
+
+      Memo.Include (S, Count);
+      return Count;
+   end Count_Match;
 
 begin
    --  Open the file for reading
@@ -98,10 +98,18 @@ begin
 
    --  Part A
    for D of Designs loop
-      if Check_Match (D) then
+      if Count_Match (D) > 0 then
          Possible := Possible + 1;
       end if;
    end loop;
-   Put_Line ("Feasible designs: " & Possible'Image);
+   Put_Line ("Part A: " & Possible'Image);
+
+   --  Part B
+   for D of Designs loop
+      if Memo.Contains (D) then
+         Arrange_Sum := Arrange_Sum + Memo.Element (D);
+      end if;
+   end loop;
+   Put_Line ("Part B: " & Arrange_Sum'Image);
 
 end Day19;
