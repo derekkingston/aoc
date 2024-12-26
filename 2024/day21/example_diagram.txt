@@ -1,0 +1,45 @@
+A3
+^A
+<A>A
+v<<A>>^AvA^A
+
+37
+^^<<A
+<AAv<AA>>^A
+v<<A>>^AAv<A<A>>^AAvAA<^A>A
+
+v<<A>>^AvA^A v<<A>>^AAv<A<A>>^AAvAA<^A>A
+###############
+<v<A>>^AvA^A <vA<AA>>^AAvA<^A>AAvA^A
+
+
+***************  (V1)
+v<<A >>^A vA ^A    v<<A >>^A A v<A <A >>^A A vA A <^A >A
+---- ---- -- --    ---- ---- - --- -- ---- - -- - --- --
+ <     A   >  A     <     A  A  v   <   A  A  > >  ^   A
+ -------   ----     -------  -  ---------  -  ----------
+    ^        A          ^    ^      <      <       A
+    ----------          ----------------------------
+        3                           7
+
+###############
+<v<A >>^A vA ^A    <vA <A A >>^A A vA <^A >A A vA ^A    <vA >^A A <A >A <v<A >A >^A A A vA <^A >A
+---- ---- -- --    --- -- - ---- - -- --- -- - -- --    --- --- - -- -- ---- -- --- - - -- --- --
+ <     A   >  A     v   < <  A   A  >  ^   A A  >  A     v   A  A  ^  A  <    v   A A A  >  ^   A
+ -------   ----     ----------   -  -------- -  ----
+    ^        A          <        <     ^     ^    A
+    ----------          ---------------------------
+        3                           7
+ 
+
+***************  (V2)
+Code [A029A]: <vA<AA>>^AvAA<^A>Av<<A>>^AvA^Av<<A>>^AA<vA>A^A<A>Av<<A>A>^AAAvA<^A>A
+       029A:  <vA<AA>>^AvAA<^A>A<v<A>>^AvA^A<vA>^A<v<A>^A>AAvA^A<v<A>A>^AAAvA<^A>A
+Code [A980A]: v<<A>>^AAAvA^A<vA<AA>>^AvAA<^A>Av<<A>A>^AAAvA<^A>A<vA>^A<A>A
+       980A:  <v<A>>^AAAvA^A<vA<AA>>^AvAA<^A>A<v<A>A>^AAAvA<^A>A<vA>^A<A>A
+Code [A179A]: v<<A>>^A<vA<A>>^AAvAA<^A>Av<<A>>^AAvA^A<vA>^AA<A>Av<<A>A>^AAAvA<^A>A
+       179A:  <v<A>>^A<vA<A>>^AAvAA<^A>A<v<A>>^AAvA^A<vA>^AA<A>A<v<A>A>^AAAvA<^A>A
+Code [A456A]: v<<A>>^AA<vA<A>>^AAvAA<^A>A<vA>^A<A>A<vA>^A<A>Av<<A>A>^AAvA<^A>A
+       456A:  <v<A>>^AA<vA<A>>^AAvAA<^A>A<vA>^A<A>A<vA>^A<A>A<v<A>A>^AAvA<^A>A
+Code [A379A]: v<<A>>^AvA^A<vA<AA>>^AAvA<^A>AAvA^A<vA>^AA<A>Av<<A>A>^AAAvA<^A>A
+       379A:  <v<A>>^AvA^A<vA<AA>>^AAvA<^A>AAvA^A<vA>^AA<A>A<v<A>A>^AAAvA<^A>A
