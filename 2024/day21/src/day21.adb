@@ -21,17 +21,24 @@ procedure day21 is
       return Ada.Strings.Hash (To_String (Key));
    end Unbounded_String_Hash;
 
-   package Mapping is new Ada.Containers.Hashed_Maps
+   package Transition_Mapping is new Ada.Containers.Hashed_Maps
      (Key_Type => Unbounded_String,
       Hash => Unbounded_String_Hash,
       Equivalent_Keys => "=",
       Element_Type => Unbounded_String);
-   use Mapping;
+   use Transition_Mapping;
+
+   package Index_Mapping is new Ada.Containers.Hashed_Maps
+     (Key_Type => Unbounded_String,
+      Hash => Unbounded_String_Hash,
+      Equivalent_Keys => "=",
+      Element_Type => Positive);
+   use Index_Mapping;
 
    Example       : String_Vec.Vector := String_Vec.Empty_Vector;
    Input         : String_Vec.Vector := String_Vec.Empty_Vector;
-   Num_To_Dir    : Mapping.Map;
-   Dir_To_Dir    : Mapping.Map;
+   Num_To_Dir    : Transition_Mapping.Map;
+   Dir_To_Dir    : Transition_Mapping.Map;
    Num_Pad_Vals  : constant String := "0123456789A";
    Dir_Pad_Vals  : constant String := "^>v<A";
    To_From       : Unbounded_String;
@@ -45,6 +52,14 @@ procedure day21 is
    Code_Val      : UInt;
    Code_Length   : UInt;
    Code_Sum      : UInt := 0;
+
+   MAX_ROBOTS    : constant Natural := 25;
+   NUM_TRANSITIONS : constant Natural := Dir_Pad_Vals'Length ** 2;
+   type Count_Matrix is array (1 .. MAX_ROBOTS, 1 .. NUM_TRANSITIONS) of UInt;
+
+   Big_Count     : Count_Matrix := (others => (others => 0));
+   To_Idx        : Index_Mapping.Map;
+   Init_Idx      : Positive := 1;
 
    function Num_Pad_Coord (V : Character) return Location is
    begin
@@ -124,8 +139,9 @@ procedure day21 is
       return S;
    end Col_First;
 
-   function Process_Combo (S : Unbounded_String) return Unbounded_String is
+   function Process_Combo (S0 : Unbounded_String) return Unbounded_String is
       Code : Unbounded_String := Null_Unbounded_String;
+      S : constant Unbounded_String := 'A' & S0; --  always start from 'A'
    begin
       for I in 2 .. Length (S) loop
          Code := Code & Dir_To_Dir.Element (
@@ -133,6 +149,48 @@ procedure day21 is
       end loop;
       return Code;
    end Process_Combo;
+
+   function Solve_Code (Code : Unbounded_String; N : Positive) return UInt is
+      Transition : Unbounded_String;
+      Idx_A, Idx_B : Positive;
+      Presses : UInt := 0;
+   begin
+      Combo := To_Unbounded_String ("A");  --  initialize to A at start
+      for I in 2 .. Length (Code) loop
+         --  second robot controlling first robot
+         --  note: code starts with A to ensure robot initialized
+         Combo := Combo & Num_To_Dir.Element (
+            To_Unbounded_String (Slice (Code, I - 1, I)));
+      end loop;
+
+      --  load first intermediate robot
+      for J in 2 .. Length (Combo) loop
+         Transition := To_Unbounded_String (Slice (Combo, J - 1, J));
+         Idx_A := To_Idx.Element (Transition);
+         Big_Count (1, Idx_A) := Big_Count (1, Idx_A) + 1;
+      end loop;
+
+      --  process all remaining intermediate robots
+      for R in 2 .. N loop
+         for Csr in To_Idx.Iterate loop
+            Idx_B := Element (Csr);
+            Combo := 'A' & Dir_To_Dir.Element (Key (Csr));
+            for J in 2 .. Length (Combo) loop
+               Transition := To_Unbounded_String (Slice (Combo, J - 1, J));
+               Idx_A := To_Idx.Element (Transition);
+               Big_Count (R, Idx_A) := Big_Count (R, Idx_A) + Big_Count (R - 1, Idx_B);
+            end loop;
+         end loop;
+      end loop;
+
+      --  finally add the number of button presses at the very end
+      for Csr in To_Idx.Iterate loop
+         Idx_A := Element (Csr);
+         Combo := Dir_To_Dir.Element (Key (Csr));
+         Presses := Presses + Big_Count (N, Idx_A) * UInt (Length (Combo));
+      end loop;
+      return Presses;
+   end Solve_Code;
 
    --  note: generally, very large number of permutations (n!) result
    --  here, the longest possible combo is 4 moves, which has 24 permutations
@@ -165,7 +223,7 @@ procedure day21 is
    function Optimize_Combo (S : Unbounded_String; A, X : Location)
          return Unbounded_String is
       S_Tmp : Unbounded_String := S;
-      Min_Len : Integer := Integer'Last;
+      Min_Len : UInt := UInt'Last;
       Resulting_Presses : Unbounded_String;
       Best_S : Unbounded_String := S;
       Loc_Tmp : Location;
@@ -192,39 +250,21 @@ procedure day21 is
          end loop;
          --  check length of processed result
          if Valid_P then
+            --  get length of sequence via two intermediates
+            --  note: must be at least two to capture dependence
+            --  on button ordering
             Resulting_Presses := 'A' & P & 'A';
             Resulting_Presses := Process_Combo (Resulting_Presses);
             Resulting_Presses := 'A' & Resulting_Presses;
             Resulting_Presses := Process_Combo (Resulting_Presses);
-            if Length (Resulting_Presses) < Min_Len then
-               Min_Len := Length (Resulting_Presses);
+            if UInt (Length (Resulting_Presses)) < Min_Len then
+               Min_Len := UInt (Length (Resulting_Presses));
                Best_S := P;
             end if;
          end if;
       end loop;
       return Best_S;
    end Optimize_Combo;
-
-   function Solve_Code (Code : Unbounded_String; N : Positive) return UInt is
-      Presses : UInt := 0;
-   begin
-      for I in 2 .. Length (Code) loop
-         --  second robot controlling first robot
-         --  note: code starts with A to ensure robot initialized
-         Combo := Num_To_Dir.Element (
-            To_Unbounded_String (Slice (Code, I - 1, I)));
-         for J in 1 .. N loop
-            --  intermediate robots controlling others, always start/end with 'A'
-            Combo := 'A' & Combo;
-            Combo := Process_Combo (Combo);
-         end loop;
-         --  me controlling last robot, always start/end with 'A'
-         Combo := 'A' & Combo;
-         Combo := Process_Combo (Combo);
-         Presses := Presses + UInt (Length (Combo));
-      end loop;
-      return Presses;
-   end Solve_Code;
 
 begin
    Example.Append (To_Unbounded_String ("A029A"));
@@ -238,6 +278,15 @@ begin
    Input.Append (To_Unbounded_String ("A129A"));
    Input.Append (To_Unbounded_String ("A283A"));
    Input.Append (To_Unbounded_String ("A540A"));
+
+   --  create the index mapping from tranitions to matrix index
+   for I in Dir_Pad_Vals'Range loop
+      for J in Dir_Pad_Vals'Range loop
+         To_From := To_Unbounded_String (Dir_Pad_Vals (I) & Dir_Pad_Vals (J));
+         To_Idx.Insert (To_From, Init_Idx);
+         Init_Idx := Init_Idx + 1;
+      end loop;
+   end loop;
 
    --  attempt to create mapping by just avoiding the blank
    for I in Dir_Pad_Vals'Range loop
@@ -294,12 +343,24 @@ begin
    --  end loop;
    --  New_Line;
 
-   --  Part A: 1 intermediate robot
+   --  Part A: intermediate robots = 2
+   Code_Sum := 0;
+   Big_Count := (others => (others => 0));
    for Code of Input loop
       Code_Val := UInt'Value (Slice (Code, 2, Length (Code) - 1));
-      Code_Length := Solve_Code (Code, 1);
+      Code_Length := Solve_Code (Code, 2);
       Code_Sum := Code_Sum + Code_Val * Code_Length;
    end loop;
    Put_Line ("Part A: " & Code_Sum'Image);
+
+   --  --  Part B: intermediate robots = 25
+   --  Code_Sum := 0;
+   --  Big_Count := (others => (others => 0));
+   --  for Code of Input loop
+   --     Code_Val := UInt'Value (Slice (Code, 2, Length (Code) - 1));
+   --     Code_Length := Solve_Code (Code, 25);
+   --     Code_Sum := Code_Sum + Code_Val * Code_Length;
+   --  end loop;
+   --  Put_Line ("Part B: " & Code_Sum'Image);
 
 end day21;

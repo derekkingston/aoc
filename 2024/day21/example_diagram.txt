@@ -43,3 +43,29 @@ Code [A456A]: v<<A>>^AA<vA<A>>^AAvAA<^A>A<vA>^A<A>A<vA>^A<A>Av<<A>A>^AAvA<^A>A
        456A:  <v<A>>^AA<vA<A>>^AAvAA<^A>A<vA>^A<A>A<vA>^A<A>A<v<A>A>^AAvA<^A>A
 Code [A379A]: v<<A>>^AvA^A<vA<AA>>^AAvA<^A>AAvA^A<vA>^AA<A>Av<<A>A>^AAAvA<^A>A
        379A:  <v<A>>^AvA^A<vA<AA>>^AAvA<^A>AAvA^A<vA>^AA<A>A<v<A>A>^AAAvA<^A>A
+
+<<: A
+^^: A
+<>: >>A
+>^: <^A
+<A: >>^A
+<v: >A
+A^: <A
+v^: ^A
+^<: v<A
+^>: v>A
+><: <<A
+>>: A
+^A: >A
+^v: vA
+>A: ^A
+>v: <A
+A<: v<<A
+v<: <A
+A>: vA
+v>: >A
+<^: >^A
+AA: A
+Av: <vA
+vA: >^A
+vv: A
