@@ -28,11 +28,12 @@ procedure day21 is
       Element_Type => Unbounded_String);
    use Transition_Mapping;
 
-   package Completed_Maps is new Ada.Containers.Hashed_Maps
+   package Index_Mapping is new Ada.Containers.Hashed_Maps
      (Key_Type => Unbounded_String,
       Hash => Unbounded_String_Hash,
       Equivalent_Keys => "=",
-      Element_Type => UInt);
+      Element_Type => Positive);
+   use Index_Mapping;
 
    Example       : String_Vec.Vector := String_Vec.Empty_Vector;
    Input         : String_Vec.Vector := String_Vec.Empty_Vector;
@@ -51,7 +52,14 @@ procedure day21 is
    Code_Val      : UInt;
    Code_Length   : UInt;
    Code_Sum      : UInt := 0;
-   Memo          : Completed_Maps.Map;
+
+   MAX_ROBOTS    : constant Natural := 25;
+   NUM_TRANSITIONS : constant Natural := Dir_Pad_Vals'Length ** 2;
+   type Count_Matrix is array (1 .. MAX_ROBOTS, 1 .. NUM_TRANSITIONS) of UInt;
+
+   Big_Count     : Count_Matrix := (others => (others => 0));
+   To_Idx        : Index_Mapping.Map;
+   Init_Idx      : Positive := 1;
 
    function Num_Pad_Coord (V : Character) return Location is
    begin
@@ -142,43 +150,46 @@ procedure day21 is
       return Code;
    end Process_Combo;
 
-   function Pattern_Length (Code : Unbounded_String; N : Positive)
-         return UInt is
-      S : constant Unbounded_String := 'A' & Code;
-      L : UInt := 0;
-      M_Key : constant Unbounded_String := S & To_Unbounded_String (N'Image);
-   begin
-      --  base case: already in completed map (memoization)
-      if Memo.Contains (M_Key) then
-         return Memo.Element (M_Key);
-      end if;
-      --  base case: only one robot remaining
-      if N = 1 then
-         for I in 2 .. Length (S) loop
-            L := L + UInt (Length (Dir_To_Dir.Element (
-               To_Unbounded_String (Slice (S, I - 1, I)))));
-         end loop;
-         Memo.Include (M_Key, L);
-         return L;
-      end if;
-      --  recusion: add length of all transitions for fewer robots
-      for I in 2 .. Length (S) loop
-         L := L + Pattern_Length (Dir_To_Dir.Element (
-            To_Unbounded_String (Slice (S, I - 1, I))), N - 1);
-      end loop;
-      Memo.Include (M_Key, L);
-      return L;
-   end Pattern_Length;
-
    function Solve_Code (Code : Unbounded_String; N : Positive) return UInt is
-      S : Unbounded_String;
+      Transition : Unbounded_String;
+      Idx_A, Idx_B : Positive;
+      Presses : UInt := 0;
    begin
-      --  map from the number pad to the direction pad
+      Combo := To_Unbounded_String ("A");  --  initialize to A at start
       for I in 2 .. Length (Code) loop
-         S := S & Num_To_Dir.Element (
+         --  second robot controlling first robot
+         --  note: code starts with A to ensure robot initialized
+         Combo := Combo & Num_To_Dir.Element (
             To_Unbounded_String (Slice (Code, I - 1, I)));
       end loop;
-      return Pattern_Length (S, N);
+
+      --  load first intermediate robot
+      for J in 2 .. Length (Combo) loop
+         Transition := To_Unbounded_String (Slice (Combo, J - 1, J));
+         Idx_A := To_Idx.Element (Transition);
+         Big_Count (1, Idx_A) := Big_Count (1, Idx_A) + 1;
+      end loop;
+
+      --  process all remaining intermediate robots
+      for R in 2 .. N loop
+         for Csr in To_Idx.Iterate loop
+            Idx_B := Element (Csr);
+            Combo := 'A' & Dir_To_Dir.Element (Key (Csr));
+            for J in 2 .. Length (Combo) loop
+               Transition := To_Unbounded_String (Slice (Combo, J - 1, J));
+               Idx_A := To_Idx.Element (Transition);
+               Big_Count (R, Idx_A) := Big_Count (R, Idx_A) + Big_Count (R - 1, Idx_B);
+            end loop;
+         end loop;
+      end loop;
+
+      --  finally add the number of button presses at the very end
+      for Csr in To_Idx.Iterate loop
+         Idx_A := Element (Csr);
+         Combo := Dir_To_Dir.Element (Key (Csr));
+         Presses := Presses + Big_Count (N, Idx_A) * UInt (Length (Combo));
+      end loop;
+      return Presses;
    end Solve_Code;
 
    --  note: generally, very large number of permutations (n!) result
@@ -268,6 +279,15 @@ begin
    Input.Append (To_Unbounded_String ("A283A"));
    Input.Append (To_Unbounded_String ("A540A"));
 
+   --  create the index mapping from tranitions to matrix index
+   for I in Dir_Pad_Vals'Range loop
+      for J in Dir_Pad_Vals'Range loop
+         To_From := To_Unbounded_String (Dir_Pad_Vals (I) & Dir_Pad_Vals (J));
+         To_Idx.Insert (To_From, Init_Idx);
+         Init_Idx := Init_Idx + 1;
+      end loop;
+   end loop;
+
    --  attempt to create mapping by just avoiding the blank
    for I in Dir_Pad_Vals'Range loop
       for J in Dir_Pad_Vals'Range loop
@@ -325,7 +345,7 @@ begin
 
    --  Part A: intermediate robots = 2
    Code_Sum := 0;
-   Memo.Clear;
+   Big_Count := (others => (others => 0));
    for Code of Input loop
       Code_Val := UInt'Value (Slice (Code, 2, Length (Code) - 1));
       Code_Length := Solve_Code (Code, 2);
@@ -333,15 +353,14 @@ begin
    end loop;
    Put_Line ("Part A: " & Code_Sum'Image);
 
-   --  Part B: intermediate robots = 25
-   Code_Sum := 0;
-   Memo.Clear;
-   for Code of Input loop
-      Code_Val := UInt'Value (Slice (Code, 2, Length (Code) - 1));
-      Code_Length := Solve_Code (Code, 25);
-      Code_Sum := Code_Sum + Code_Val * Code_Length;
-   end loop;
-   Put_Line ("Part B: " & Code_Sum'Image);
-   --  193369129748870 too high
+   --  --  Part B: intermediate robots = 25
+   --  Code_Sum := 0;
+   --  Big_Count := (others => (others => 0));
+   --  for Code of Input loop
+   --     Code_Val := UInt'Value (Slice (Code, 2, Length (Code) - 1));
+   --     Code_Length := Solve_Code (Code, 25);
+   --     Code_Sum := Code_Sum + Code_Val * Code_Length;
+   --  end loop;
+   --  Put_Line ("Part B: " & Code_Sum'Image);
 
 end day21;
