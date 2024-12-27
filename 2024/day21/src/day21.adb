@@ -212,6 +212,7 @@ procedure day21 is
    function Optimize_Combo (S : Unbounded_String; A, X : Location)
          return Unbounded_String is
       S_Tmp : Unbounded_String := S;
+      L : UInt;
       Min_Len : UInt := UInt'Last;
       Resulting_Presses : Unbounded_String;
       Best_S : Unbounded_String := S;
@@ -242,12 +243,10 @@ procedure day21 is
             --  get length of sequence via two intermediates
             --  note: must be at least two to capture dependence
             --  on button ordering
-            Resulting_Presses := 'A' & P & 'A';
-            Resulting_Presses := Process_Combo (Resulting_Presses);
-            Resulting_Presses := 'A' & Resulting_Presses;
-            Resulting_Presses := Process_Combo (Resulting_Presses);
-            if UInt (Length (Resulting_Presses)) < Min_Len then
-               Min_Len := UInt (Length (Resulting_Presses));
+            Resulting_Presses := P & 'A';
+            L := Pattern_Length (Resulting_Presses, 25);
+            if L < Min_Len then
+               Min_Len := L;
                Best_S := P;
             end if;
          end if;
@@ -325,7 +324,6 @@ begin
 
    --  Part A: intermediate robots = 2
    Code_Sum := 0;
-   Memo.Clear;
    for Code of Input loop
       Code_Val := UInt'Value (Slice (Code, 2, Length (Code) - 1));
       Code_Length := Solve_Code (Code, 2);
@@ -335,7 +333,6 @@ begin
 
    --  Part B: intermediate robots = 25
    Code_Sum := 0;
-   Memo.Clear;
    for Code of Input loop
       Code_Val := UInt'Value (Slice (Code, 2, Length (Code) - 1));
       Code_Length := Solve_Code (Code, 25);
