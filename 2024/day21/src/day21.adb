@@ -285,19 +285,28 @@ begin
          Dir_To_Dir.Insert (To_From, Combo);
       end loop;
    end loop;
+
+   --  FIX BY FIAT: prioritize left, down, up right in that order
+   --  Note: assumes a fixed strategy for each directional pad robot
+   --  Intuition: left, down priority was discovered by viewing the ordering
+   --  of presses as a traveling salesman problem and concluding that reaching
+   --  left or down first allows up/right to be pressed on the way back to 'A'.
+   --  Discovering that `up` is higher priority than `right` required manual
+   --  search through the "direction pad robot fixed strategy space", meaning
+   --  trial and error on the 'Dir_To_Dir' mapping values. What follows below
+   --  is the result of that manual search and adjustment to the Dir_To_Dir map
+   --  to set the direction pad robot strategy
+   Dir_To_Dir.Include (To_Unbounded_String ("A<"), To_Unbounded_String ("v<<A"));
+   Dir_To_Dir.Include (To_Unbounded_String ("Av"), To_Unbounded_String ("<vA"));
+   Dir_To_Dir.Include (To_Unbounded_String ("^>"), To_Unbounded_String ("v>A"));
+   Dir_To_Dir.Include (To_Unbounded_String (">^"), To_Unbounded_String ("<^A"));
+   Dir_To_Dir.Include (To_Unbounded_String ("vA"), To_Unbounded_String ("^>A"));
    --  Put_Line ("Dir_To_Dir");
    --  for Csr in Dir_To_Dir.Iterate loop
    --     Put_Line (To_String (Key (Csr)) & ": "
    --        & To_String (Dir_To_Dir (Csr)));
    --  end loop;
    --  New_Line;
-
-   --  FIX BY FIAT to prioritize left and down before up before right
-   Dir_To_Dir.Include (To_Unbounded_String ("A<"), To_Unbounded_String ("v<<A"));
-   Dir_To_Dir.Include (To_Unbounded_String ("Av"), To_Unbounded_String ("<vA"));
-   Dir_To_Dir.Include (To_Unbounded_String ("^>"), To_Unbounded_String ("v>A"));
-   Dir_To_Dir.Include (To_Unbounded_String (">^"), To_Unbounded_String ("<^A"));
-   Dir_To_Dir.Include (To_Unbounded_String ("vA"), To_Unbounded_String ("^>A"));
 
    --  build shortest path mappings
    for I in Num_Pad_Vals'Range loop
@@ -313,6 +322,8 @@ begin
          else
             Combo := Col_First (Row_Diff, Col_Diff);
          end if;
+         --  optimizes mapping of numeric pad path assuming a fixed
+         --  strategy for each direction pad robot
          Combo := Optimize_Combo (Combo, LocA, Blank_Num_Pad);
          Combo := Combo & 'A';
          Num_To_Dir.Insert (To_From, Combo);
