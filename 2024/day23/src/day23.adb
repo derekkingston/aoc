@@ -1,6 +1,7 @@
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 with Ada.Containers.Ordered_Sets;
+use Ada.Containers;
 
 procedure Day23 is
    type UShort is mod 2**16;
@@ -29,6 +30,10 @@ procedure Day23 is
    Primes        : UShort_Array := (others => 0);
    Connections   : Bool_Matrix := (others => (others => False));
    Triples       : UInt_Sets.Set;
+   B_K_R         : UShort_Sets.Set;
+   B_K_X         : UShort_Sets.Set;
+   B_K_P         : UShort_Sets.Set;
+   Max_Clique    : UShort_Sets.Set;
 
    --  create a mapping from two character lower-case string to UShort
    function To_Id (S : String) return UShort is
@@ -130,6 +135,34 @@ procedure Day23 is
       return Shared;
    end Shared_Neighbors;
 
+   --  maximal clique computation: Bron Kerbosch algorithm, following
+   --  https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm
+   procedure Bron_Kerbosch (R, P, X : in out UShort_Sets.Set) is
+      P_Start : constant UShort_Sets.Set := P;
+      N_v : UShort_Sets.Set;
+      R_U_v : UShort_Sets.Set;
+      P_n_Nv : UShort_Sets.Set;
+      X_n_Nv : UShort_Sets.Set;
+   begin
+      if P.Is_Empty and then X.Is_Empty then
+         --  R is a maximal clique
+         if R.Length > Max_Clique.Length then
+            Max_Clique := R;
+         end if;
+         return;
+      end if;
+      for Vertex of P_Start loop
+         N_v := Get_Neighbors (Vertex);
+         R_U_v := R;
+         R_U_v.Include (Vertex);
+         P_n_Nv := P and N_v;
+         X_n_Nv := X and N_v;
+         Bron_Kerbosch (R_U_v, P_n_Nv, X_n_Nv);
+         P.Exclude (Vertex);
+         X.Include (Vertex);
+      end loop;
+   end Bron_Kerbosch;
+
 begin
    Compute_Prime_Mapping;
 
@@ -175,5 +208,14 @@ begin
       end if;
    end loop;
    Put_Line ("Part A: " & Triples.Length'Image);
+
+   --  Part B: find maximum clique
+   B_K_P := Computers; --  initialize to all vertices
+   Bron_Kerbosch (B_K_R, B_K_P, B_K_X);
+   Put ("Part B: ");
+   for Comp of Max_Clique loop
+      Put (To_Name (Comp) & ",");
+   end loop;
+   New_Line;
 
 end Day23;
