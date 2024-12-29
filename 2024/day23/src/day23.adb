@@ -1,6 +1,5 @@
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Strings.Fixed; use Ada.Strings.Fixed;
-with Ada.Containers.Vectors;
 with Ada.Containers.Ordered_Sets;
 
 procedure Day23 is
@@ -32,26 +31,25 @@ procedure Day23 is
    Triples       : UInt_Sets.Set;
 
    --  create a mapping from two character lower-case string to UShort
-   --  treat first character as the least significant bits
    function To_Id (S : String) return UShort is
       A : constant UShort := UShort (Character'Pos (
             S (S'First))) - Zero;
       B : constant UShort := UShort (Character'Pos (
             S (S'First + 1))) - Zero;
    begin
-      return B * Width + A;
+      return A * Width + B;
    end To_Id;
 
    function To_Name (Id : UShort) return String is
-      A : constant Character := Character'Val (Id mod Width + Zero);
-      B : constant Character := Character'Val (Id / Width + Zero);
+      A : constant Character := Character'Val (Id / Width + Zero);
+      B : constant Character := Character'Val (Id mod Width + Zero);
    begin
       return A & B;
    end To_Name;
 
    function Starts_With_T (Id : UShort) return Boolean is
    begin
-      if Id mod Width = T_Id then
+      if Id / Width = T_Id then
          return True;
       end if;
       return False;
@@ -90,6 +88,19 @@ procedure Day23 is
       end loop;
    end Compute_Prime_Mapping;
 
+   --  each two-character computer name is mapped to an integer 0 .. 676
+   --  and each of those integers is mapped to a prime number;
+   --  therefore, A*B*C is uniquely identified by the prime factors
+   --  associated with each of A, B, and C and yet is equivalent
+   --  to the product in any order A*B*C = A*C*B = B*A*C = B*C*A, etc
+   --  so a triplet of computers in any permutation is uniquely
+   --  identified by using the fuction `Triple_Key`
+   --  KEY IDEA: add the "triple key" number (product of the
+   --  corresponding primes for A, B, C) to a set if all the computers
+   --  are connected to each other. When other permutations of that
+   --  group of computers are encountered, the same triple key will
+   --  be returned and so the total set of all triples will not
+   --  inadvertently double-count the same group of 3 computers
    function Triple_Key (A, B, C : UShort) return UInt is
    begin
       return UInt (Primes (A)) * UInt (Primes (B)) * UInt (Primes (C));
