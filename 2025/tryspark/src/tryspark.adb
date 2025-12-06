@@ -1,7 +1,8 @@
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Integer_Text_IO; use Ada.Integer_Text_IO;
+with Shapes;
 
-procedure Day01 with
+procedure TrySpark with
       SPARK_Mode => On
    is
 
@@ -24,6 +25,9 @@ procedure Day01 with
          Put_Line ("Cannot write value!");
    end Put_Val;
 
+   P1 : constant InputData.Point := (X => 0, Y => 10);
+   P2 : constant InputData.Point := (X => 5, Y => 0);
+   Rt : constant InputData.Rectangle := (Top_Left => P1, Bottom_Right => P2);
 begin
    ExpectOne : Integer := 0;
    Increment (ExpectOne);
@@ -31,4 +35,6 @@ begin
    Put_Line ("Incrementing safely!");
    Put_Val (ExpectOne);
    Put_Line ("");
-end Day01;
+   Put_Line ("Rectangle Area: " &
+      Shapes.UInt64'Image (InputData.Area (Rt)));
+end TrySpark;

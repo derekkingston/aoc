@@ -1,5 +1,5 @@
-name = "day01"
-description = "AoC 2025 Day 01"
+name = "tryspark"
+description = "Playing around with SPARK"
 version = "0.1.0-dev"
 
 authors = ["Derek Kingston"]
@@ -9,7 +9,7 @@ licenses = "MIT"
 website = ""
 tags = []
 
-executables = ["day01"]
+executables = ["tryspark"]
 
 [[depends-on]]
 gnatprove = "^15.1.0"
