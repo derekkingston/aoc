@@ -11,5 +11,13 @@ tags = []
 
 executables = ["tryspark"]
 
+[build-switches]
+"*".optimization = ["-gnatX"]
+"*".debug_info  = ["-gnatX"]
+"*".contracts = ["-gnatX"]
+"*".compile_checks = ["-gnatX"]
+"*".runtime_checks = ["-gnatX"]
+"*".style_checks = ["-gnatyM100"]
+
 [[depends-on]]
 gnatprove = "^15.1.0"
