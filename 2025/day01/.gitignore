@@ -1,4 +1,2 @@
-/obj/
-/bin/
-/alire/
-/config/
+*.o
+day01
