@@ -1,9 +1,9 @@
 # Compiler
 CXX = g++
 # Compiler flags
-CXXFLAGS = -Wall -Wextra -std=c++17
+CXXFLAGS = -O3 -march=native -Wall -Wextra -std=c++17
 # Target executable name
-TARGET = day01
+TARGET = aoc
 
 # Default rule
 all: $(TARGET)

@@ -1,2 +1,3 @@
 *.o
-day01
+aoc
+*.txt
