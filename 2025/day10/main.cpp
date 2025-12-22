@@ -7,6 +7,9 @@
 #include <bitset>
 #include <algorithm>
 
+#include "Eigen/Dense"
+#include <glpk.h>
+
 // Split function
 // example:
 //     auto fields = split(line, ',');
@@ -47,6 +50,7 @@ class FactoryMachine {
     size_t min_presses;
     std::map<std::bitset<MAX_LIGHTS>, size_t, BitsetLess> memo;
     void computeMinPresses(std::bitset<MAX_LIGHTS> light_state, size_t button_presses);
+    size_t matchJoltages();
 };
 
 void FactoryMachine::computeMinPresses(std::bitset<MAX_LIGHTS> light_state, size_t button_presses) {
@@ -141,6 +145,111 @@ bool parseMachine(const std::string& s, FactoryMachine& mach) {
     return true;
 }
 
+bool ilp_solve(const Eigen::MatrixXd& A, const Eigen::VectorXd& b, Eigen::VectorXd& x) {
+    // NOTE: GLPK uses 1-based indexing
+    int m = A.rows();
+    int n = A.cols();
+    x.resize(n);
+    x.setZero();
+
+    // Create GLPK problem
+    glp_prob* lp = glp_create_prob();
+    glp_set_obj_dir(lp, GLP_MIN);  // minimize sum(x)
+
+    // Add rows (constraints)
+    glp_add_rows(lp, m);
+    for (int i = 0; i < m; ++i) {
+        glp_set_row_bnds(lp, i+1, GLP_FX, b(i), b(i));  // equality: A_i * x = b_i
+    }
+
+    // Add columns (variables)
+    glp_add_cols(lp, n);
+    for (int j = 0; j < n; ++j) {
+        glp_set_col_bnds(lp, j+1, GLP_LO, 0.0, 0.0);  // x_j >= 0
+        glp_set_col_kind(lp, j+1, GLP_IV);            // integer variable
+        glp_set_obj_coef(lp, j+1, 1.0);               // objective: minimize sum(x)
+    }
+
+    // Load A into GLPK sparse matrix format
+    std::vector<int> ia(1);
+    std::vector<int> ja(1);
+    std::vector<double> ar(1);
+
+    // Count nonzeros
+    for (int i = 0; i < m; ++i)
+        for (int j = 0; j < n; ++j)
+            if (A(i,j) != 0.0) {
+                ia.push_back(i+1);
+                ja.push_back(j+1);
+                ar.push_back(A(i,j));
+            }
+
+    glp_load_matrix(lp, ia.size()-1, ia.data(), ja.data(), ar.data());
+
+    // Solve (LP relaxation first, then integer)
+    glp_smcp smcp;
+    glp_init_smcp(&smcp);
+    smcp.msg_lev = GLP_MSG_OFF;  // turn off all simplex output
+    glp_simplex(lp, &smcp);
+
+    glp_iocp iocp;
+    glp_init_iocp(&iocp);
+    iocp.msg_lev = GLP_MSG_OFF;  // turn off all MIP output
+    iocp.presolve = GLP_ON;
+
+    int ret = glp_intopt(lp, &iocp);
+    if (ret != 0) {
+        std::cout << "GLPK intopt failed\n";
+        glp_delete_prob(lp);
+        return false;
+    }
+
+    // Extract solution
+    int status = glp_mip_status(lp);
+    if (status == GLP_OPT || status == GLP_FEAS) {
+        for (int j = 1; j <= n; ++j) {
+            double val = glp_mip_col_val(lp, j);
+            x(j-1) = val;
+        }
+        // std::cout << "Objective = " << glp_mip_obj_val(lp) << "\n";
+        glp_delete_prob(lp);
+        return true;
+    }
+
+    std::cout << "No integer solution found.\n";
+    glp_delete_prob(lp);
+    return false;
+}
+
+size_t FactoryMachine::matchJoltages() {
+    Eigen::MatrixXd A;
+    A.resize(joltages.size(), buttons.size());
+    A.setZero();
+    for(size_t j=0; j<buttons.size(); ++j) {
+        for(size_t k=0; k<MAX_LIGHTS; ++k) {
+            if(buttons[j][k]) {
+                A(k,j) = 1;
+            }
+        }
+    }
+
+    Eigen::VectorXd b;
+    b.resize(joltages.size());
+    for(size_t j=0; j<joltages.size(); ++j) {
+        b(j) = joltages[j];
+    }
+
+    // NOTE: solving psuedo inverse and rounding is not sufficient, need ILP solver
+    // Eigen::VectorXd soln = A.colPivHouseholderQr().solve(b).array().round();
+
+    Eigen::VectorXd soln;
+    if(!ilp_solve(A, b, soln)) {
+        exit(1);
+    }
+    return soln.sum();
+}
+
+
 int main() {
     // std::string file_name = "test_input.txt";
     std::string file_name = "input.txt";
@@ -163,14 +272,15 @@ int main() {
     }
 
     int64_t partA = 0;
+    int64_t partB = 0;
     for(auto& mach : machines) {
         // std::cout << "Processing ..." << std::endl;
         mach.computeMinPresses(std::bitset<MAX_LIGHTS>(), 0);
         partA += mach.min_presses;
+        partB += mach.matchJoltages();
     }
     std::cout << "Part A: " << partA << std::endl;
-
-    // std::cout << "Part B: " << countWorlds(clean_workspace) << std::endl;
+    std::cout << "Part B: " << partB << std::endl;
 
     return 0;
 }
