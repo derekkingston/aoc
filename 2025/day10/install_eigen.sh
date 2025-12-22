@@ -18,3 +18,5 @@ rm  eigen.tar.gz
 
 echo "Eigen installed!"
 
+echo "Full day 10 solution also requires GLPK: sudo apt install glpk-utils libglpk-dev"
+
