@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <map>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -28,25 +29,11 @@ bool isNumeric(const std::string& s) {
 }
 
 #define MAX_LIGHTS 16
-class Trace {
-    public:
-    Trace() : lights({std::bitset<MAX_LIGHTS>()}), presses({}) {};
-    Trace(const Trace& t) : lights(t.lights), presses(t.presses) {};
-    std::vector< std::bitset<MAX_LIGHTS> > lights;
-    std::vector< size_t > presses;
-
-    // this is ugly since bitset doesn't define < operator
-    bool operator<(const Trace& other) const {
-        if(presses != other.presses) {
-            return presses < other.presses;
-        }
-        return std::lexicographical_compare(
-            lights.begin(), lights.end(),
-            other.lights.begin(), other.lights.end(),
-            [](const std::bitset<MAX_LIGHTS>& a, const std::bitset<MAX_LIGHTS>& b) {
-                return a.to_ulong() < b.to_ulong();
-            }
-        );
+// this is ugly since bitset doesn't define < operator
+struct BitsetLess {
+    bool operator()(const std::bitset<MAX_LIGHTS>& a,
+                    const std::bitset<MAX_LIGHTS>& b) const {
+        return a.to_ulong() < b.to_ulong();
     }
 };
 
@@ -58,47 +45,44 @@ class FactoryMachine {
     std::vector< int64_t > joltages;
 
     size_t min_presses;
-    void computeMinPresses(const Trace& t);
+    std::map<std::bitset<MAX_LIGHTS>, size_t, BitsetLess> memo;
+    void computeMinPresses(std::bitset<MAX_LIGHTS> light_state, size_t button_presses);
 };
 
-void FactoryMachine::computeMinPresses(const Trace& t) {
-    // base-case: exceeded minimum
-    if(t.presses.size() >= min_presses) {
+void FactoryMachine::computeMinPresses(std::bitset<MAX_LIGHTS> light_state, size_t button_presses) {
+    // base-case: pushing even one more button will reach or exceed best so far
+    if((button_presses+1) >= min_presses) {
         return;
     }
 
-    // base-case: reached goal
-    if(t.lights.back() == goal) {
-        std::cout << "Found goal: " << t.presses.size() << " vs " << min_presses << std::endl;
-        min_presses = std::min(min_presses, t.presses.size());
+    // memo-ize: don't continue from a state already visited unless at fewer button presses
+    if(memo.find(light_state) != memo.end() && button_presses >= memo[light_state]) {
         return;
     }
+    memo[light_state] = button_presses;
 
-    // try pushing all valid buttons, sorting by distance to goal
-    std::vector< std::tuple< std::bitset<MAX_LIGHTS>, size_t, size_t > > next_presses;
+    // try pushing all valid buttons
+    std::vector< std::pair<std::bitset<MAX_LIGHTS>, size_t> > next_presses;
     for(size_t b=0; b<buttons.size(); ++b) {
-        // if we just pushed this button, pushing it again in succession is pointless
-        if(!t.presses.empty() && b == t.presses.back()) continue;
         // see what the light state would be after pushing b using XOR
-        std::bitset<MAX_LIGHTS> next_lights = t.lights.back() ^ buttons[b];
-        // check to see if the new light state has already been seen in the trace
-        if(std::find(t.lights.begin(), t.lights.end(), next_lights) != t.lights.end()) {
-            continue;
+        std::bitset<MAX_LIGHTS> next_lights = light_state ^ buttons[b];
+        if(next_lights == goal) {
+            // std::cout << "Found new best: " << button_presses+1 << " vs " << min_presses << std::endl;
+            min_presses = std::min(min_presses, button_presses + 1);
+            return;
         }
-        next_presses.push_back( {next_lights, b, (next_lights ^ goal).count()} );
+        next_presses.push_back( {next_lights, (next_lights ^ goal).count()} );
     }
+
+    // order children by button press that results in closest to goal first
     std::sort(next_presses.begin(), next_presses.end(),
         [](auto const& a, auto const& b) {
-            return std::get<2>(a) < std::get<2>(b);
+            return a.second < b.second;
         });
 
+    // greedy depth first search (DFS), recurse to each valid child 
     for(auto& next_press : next_presses) {
-        // build a trace with the new button press
-        Trace nextt(t);
-        nextt.lights.push_back(std::get<0>(next_press));
-        nextt.presses.push_back(std::get<1>(next_press));
-        // then recurse
-        computeMinPresses(nextt);
+        computeMinPresses(next_press.first, button_presses + 1);
     }
     return;
 }
@@ -108,6 +92,7 @@ bool parseMachine(const std::string& s, FactoryMachine& mach) {
     mach.goal.reset();
     mach.buttons.clear();
     mach.joltages.clear();
+    mach.memo.clear();
 
     // parse machine size (number of lights total)
     auto goalplus = split(s, ']');
@@ -179,9 +164,8 @@ int main() {
 
     int64_t partA = 0;
     for(auto& mach : machines) {
-        std::cout << "Processing ..." << std::endl;
-        Trace t;
-        mach.computeMinPresses(t);
+        // std::cout << "Processing ..." << std::endl;
+        mach.computeMinPresses(std::bitset<MAX_LIGHTS>(), 0);
         partA += mach.min_presses;
     }
     std::cout << "Part A: " << partA << std::endl;
