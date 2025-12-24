@@ -34,6 +34,11 @@ size_t countPaths(const std::unordered_map<std::string, std::vector<std::string>
     // exhaustive depth-first search counting each time reaching goal
     // memo-ize the count of paths from this start node
     if(memo.count(start)) return memo[start];
+    if(!graph.count(start)) {
+        // std::cout << "Couldn't find an entry in the graph for " << start << std::endl;
+        memo[start] = 0;
+        return 0;
+    }
 
     size_t count = 0;
     for(const std::string& node : graph.at(start)) {
@@ -68,7 +73,24 @@ int main() {
         graph[source[0]] = split(source[1].substr(1), ' ');
     }
 
+    memo.clear();
     std::cout << "Part A: " << countPaths(graph, "you", "out") << std::endl;
+
+    memo.clear();
+    size_t svr_dac = countPaths(graph, "svr", "dac");
+    memo.clear();
+    size_t svr_fft = countPaths(graph, "svr", "fft");
+    memo.clear();
+    size_t fft_dac = countPaths(graph, "fft", "dac");
+    memo.clear();
+    size_t dac_fft = countPaths(graph, "dac", "fft");
+    memo.clear();
+    size_t dac_out = countPaths(graph, "dac", "out");
+    memo.clear();
+    size_t fft_out = countPaths(graph, "fft", "out");
+
+    size_t partB = (svr_dac*dac_fft*fft_out) + (svr_fft*fft_dac*dac_out);
+    std::cout << "Part B: " << partB << std::endl;
 
     return 0;
 }
