@@ -28,67 +28,28 @@ bool isNumeric(const std::string& s) {
     return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit);
 }
 
-// Backtracking to rebuild all shortest paths
-void buildPaths(const std::string& node,
-                const std::string& start,
-                std::unordered_map<std::string, std::vector<std::string>>& parents,
-                std::vector<std::string>& path,
-                std::vector<std::vector<std::string>>& allPaths)
-{
-    if (node == start) {
-        std::vector<std::string> temp = path;
-        reverse(temp.begin(), temp.end());
-        allPaths.push_back(temp);
-        return;
-    }
+std::unordered_map<std::string, size_t> memo;
+size_t countPaths(const std::unordered_map<std::string, std::vector<std::string>>& graph,
+                  const std::string& start, const std::string& goal) {
+    // exhaustive depth-first search counting each time reaching goal
+    // memo-ize the count of paths from this start node
+    if(memo.count(start)) return memo[start];
 
-    for (const std::string& p : parents[node]) {
-        path.push_back(p);
-        buildPaths(p, start, parents, path, allPaths);
-        path.pop_back();
-    }
-}
-
-std::vector<std::vector<std::string>> bfsAllShortestPaths(
-        std::unordered_map<std::string, std::vector<std::string>>& graph,
-        const std::string& start,
-        const std::string& target)
-{
-    std::unordered_map<std::string, int> dist;
-    std::unordered_map<std::string, std::vector<std::string>> parents;
-
-    std::queue<std::string> q;
-    q.push(start);
-    dist[start] = 0;
-
-    while (!q.empty()) {
-        std::string u = q.front();
-        q.pop();
-
-        for (const std::string& v : graph[u]) {
-            if (!dist.count(v)) {
-                // First time visiting v → shortest path found
-                dist[v] = dist[u] + 1;
-                parents[v].push_back(u);
-                q.push(v);
-            } else if (dist[v] == dist[u] + 1) {
-                // Another shortest path found
-                parents[v].push_back(u);
-            }
+    size_t count = 0;
+    for(const std::string& node : graph.at(start)) {
+        if(node == goal) {
+            count++;
+        } else {
+            count += countPaths(graph, node, goal);
         }
     }
-
-    // Reconstruct all shortest paths
-    std::vector<std::vector<std::string>> allPaths;
-    std::vector<std::string> path = {target};
-    buildPaths(target, start, parents, path, allPaths);
-
-    return allPaths;
+    memo[start] = count;
+    return count;
 }
 
 int main() {
-    std::string file_name = "test_input.txt";
-    // std::string file_name = "input.txt";
+    // std::string file_name = "test_input.txt";
+    std::string file_name = "input.txt";
     std::ifstream file(file_name);
     if (!file.is_open()) {
         std::cerr << "Could not open file: '" << file_name << "'" << std::endl;
@@ -107,8 +68,7 @@ int main() {
         graph[source[0]] = split(source[1].substr(1), ' ');
     }
 
-    auto paths = bfsAllShortestPaths(graph, "you", "out");
-    std::cout << "Part A: " << paths.size() << std::endl;
+    std::cout << "Part A: " << countPaths(graph, "you", "out") << std::endl;
 
     return 0;
 }
