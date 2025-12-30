@@ -9,8 +9,6 @@
 #include <set>
 #include <map>
 #include <numeric>
-#include <coroutine>
-#include <tuple>
 
 // Split function
 // example:
@@ -70,251 +68,28 @@ struct Tree {
     std::array<int, 6> pkg_count;
 };
 
-struct Pack {
-    int x_size;
-    int y_size;
-    std::vector< std::pair<int, int> > holes;
-};
-
-std::vector<std::vector<Present>> all_combos(const std::set<Present>& s, int N)
-{
-    std::vector<Present> elems(s.begin(), s.end());
-    int M = elems.size();
-
-    std::vector<std::vector<Present>> result;
-
-    if (N <= 0 || M == 0)
-        return result;
-
-    // indices[i] \in [0, M) and indices are non-decreasing
-    std::vector<int> indices(N, 0);
-
-    while (true) {
-        // build one combination
-        std::vector<Present> combo;
-        combo.reserve(N);
-        for (int i = 0; i < N; ++i)
-            combo.push_back(elems[indices[i]]);
-        result.push_back(std::move(combo));
-
-        // increment like an odometer
-        int pos = N - 1;
-        while (pos >= 0) {
-            if (indices[pos] < M - 1) {
-                indices[pos]++;
-
-                // enforce non-decreasing rule
-                for (int j = pos + 1; j < N; ++j)
-                    indices[j] = indices[pos];
-
-                break;
-            }
-            pos--;
-        }
-
-        if (pos < 0)
-            break;
-    }
-
-    return result;
-}
-
-// global: present set for each index
-std::array<std::set<Present>, 6> present_set;
-std::array<std::vector<Present>, 6> present_elements;
-std::map<std::array<int, 6>, Pack> recipes;
-std::map<std::array<int, 6>, Pack> perfect_packs;
-
-template<typename T>
-struct Generator {
-    struct promise_type {
-        T current_value;
-
-        Generator get_return_object() {
-            return Generator{
-                std::coroutine_handle<promise_type>::from_promise(*this)
-            };
-        }
-        std::suspend_always initial_suspend() { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
-        std::suspend_always yield_value(T value) {
-            current_value = std::move(value);
-            return {};
-        }
-        void return_void() {}
-        void unhandled_exception() { throw; }
-    };
-
-    std::coroutine_handle<promise_type> h;
-
-    // default constructor
-    Generator() : h(nullptr) {}
-
-    // constructor from coroutine handle
-    explicit Generator(std::coroutine_handle<promise_type> handle) : h(handle) {}
-
-    // existing move constructor
-    Generator(Generator&& other) : h(other.h) { other.h = nullptr; }
-
-    // prevent copying (optional but typical)
-    Generator(const Generator&) = delete;
-    Generator& operator=(const Generator&) = delete;
-
-    Generator& operator=(Generator&& other) {
-        if (this != &other) {
-            if (h) h.destroy();
-            h = other.h;
-            other.h = nullptr;
-        }
-        return *this;
-    }
-
-    ~Generator() { if (h) h.destroy(); }
-
-    bool next() {
-        if (!h || h.done()) return false;
-        h.resume();
-        return !h.done();
-    }
-
-    T const& value() const { return h.promise().current_value; }
-};
-
-
-using Trial = std::vector<std::tuple<Present,int,int>>;
-
-Generator<Trial> generate_trials(
-    const std::vector<Present>& objs,
-    int X_MAX,
-    int Y_MAX)
-{
-    int N = objs.size();
-    int RADIX = X_MAX * Y_MAX;
-
-    std::vector<int> digits(N, 0);
-
-    while (true) {
-        Trial trial;
-        trial.reserve(N);
-
-        for (int i = 0; i < N; ++i) {
-            int d = digits[i];
-            int x = d % X_MAX;
-            int y = d / X_MAX;
-            trial.emplace_back(objs[i], x, y);
-        }
-
-        co_yield trial;
-
-        int pos = 0;
-        while (pos < N) {
-            digits[pos]++;
-            if (digits[pos] < RADIX)
-                break;
-            digits[pos] = 0;
-            pos++;
-        }
-
-        if (pos == N)
-            break;
-    }
-}
-
-void bestPack(const std::vector<Present>& presents) {
-    // no packing for fewer than 2 presents
-    if(presents.size() < 2) {
-        return;
-    }
-    static size_t placements = 0;
-
-    int sz = 3*presents.size();
-    auto gen = generate_trials(presents, sz-2, sz-2);
-    while (gen.next()) {
-        const Trial& t = gen.value();
-        // std::vector<int> matrix(sz*sz);
-        // auto at = [&](int r, int c) -> int& { return matrix[r * sz + c]; };
-        // std::fill(matrix.begin(), matrix.end(), 0);
-        // for(auto pc : t) {
-        //     auto [p,x,y] = pc;
-        //     std::cout << "Present: " << std::endl << p.print();
-        //     std::cout << "@ (" << x << ", " << y << ")" << std::endl;
-        // }
-        // std::string dummy;
-        // std::cout << "Press Enter to continue...";
-        // std::getline(std::cin, dummy);
-        placements++;
-        if(placements % 1000000 == 0) std::cout << placements/1000000 << "M" << std::endl;
-    }
-}
-
-void comboPack(std::array<int, 6> reqs, int i, std::vector<Present>& current) {
-    // base case: reached a complete set of presents to try to pack
-    if(i == 6 || std::accumulate(reqs.begin()+i, reqs.end(), 0) < 1) {
-        bestPack(current);
-        return;
-    }
-
-    // need to chose N presents, with duplication, out of total reqs[i]
-    int N = reqs[i];
-    if(N < 1) {
-        comboPack(reqs, i + 1, current);
-        return;
-    }
-    // reserve selected presents for this requirement
-    std::vector<Present> segment(N);
-
-    // Iterate over all N-length sequences from present_elements[i] (with replacement)
-    std::vector<size_t> idx(N, 0);
-    while (true) {
-        // Fill segment using current indices
-        for (int n=0; n<N; ++n)
-            segment[n] = present_elements[i][idx[n]];
-
-        // Append segment to current and recurse
-        current.insert(current.end(), segment.begin(), segment.end());
-        comboPack(reqs, i + 1, current);
-        current.resize(current.size() - N);
-
-        // Increment mixed‑radix counter
-        int pos = N - 1;
-        while (pos >= 0) {
-            idx[pos]++;
-            if (idx[pos] < present_elements[i].size())
-                break;
-            idx[pos] = 0;
-            pos--;
-        }
-        if (pos < 0)
-            break; // done
-    }
-}
-
-void buildBaseRecipes(int bnd) {
-    for(int a=0; a<=bnd; ++a) {
-        for(int b=0; b<=bnd; ++b) {
-            for(int c=0; c<=bnd; ++c) {
-                for(int d=0; d<=bnd; ++d) {
-                    for(int e=0; e<=bnd; ++e) {
-                        for(int f=0; f<=bnd; ++f) {
-                            std::vector<Present> empty;
-                            comboPack({a,b,c,d,e,f}, 0, empty);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-bool validTree(const Tree& tree) {
-    // assume perfect packing
+bool validTree(const Tree& tree, const std::vector<Present>& presents) {
     int allowed_area = tree.width*tree.height;
-    int package_area = 0;
+    int perfect_pack = 0;
+    int naive_pack = 0;
     for(size_t i=0; i<6; ++i) {
-        package_area += tree.pkg_count[i] * present_set[i].begin()->area();
+        perfect_pack += tree.pkg_count[i] * presents[i].area();
+        naive_pack += tree.pkg_count[i] * 9;
     }
-    if(package_area < allowed_area)
+
+    // lower bound: reject any tree that even perfect packing can't match
+    if(perfect_pack > allowed_area)
+        return false;
+
+    // upper bound: accept any tree where naive packing works
+    if(naive_pack <= allowed_area)
         return true;
+    
+    std::cout << "Indeterminate case -- " << tree.width << "x" << tree.height << ": ";
+    for(size_t i=0; i<5; ++i) {
+        std::cout << tree.pkg_count[i] << " ";
+    }
+    std::cout << tree.pkg_count[5] << std::endl;
     return false;
 }
 
@@ -371,38 +146,14 @@ int main() {
         std::cout << "Exactly 6 presents must be identified vs " << presents.size() << std::endl;
         return 1;
     }
-
-    // build present_set from rotations and flips of all available presents
-    for(size_t i=0; i<6; ++i) {
-        Present p = presents[i];
-        present_set[i].insert(p);
-        p = p.rotate();
-        present_set[i].insert(p);
-        p = p.rotate();
-        present_set[i].insert(p);
-        p = p.rotate();
-        present_set[i].insert(p);
-        p = p.flip();
-        present_set[i].insert(p);
-        p = p.rotate();
-        present_set[i].insert(p);
-        p = p.rotate();
-        present_set[i].insert(p);
-        p = p.rotate();
-        present_set[i].insert(p);
-        present_elements[i] = std::vector<Present>(present_set[i].begin(), present_set[i].end());
-    }
-
-    // killed after 17B with no evaluation computation ... doesn't seem feasible to brute force
-    // auto start = std::chrono::high_resolution_clock::now();
-    // buildBaseRecipes(2);
-    // auto end = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double, std::milli> ms = end - start;
-    // std::cout << "Elapsed: " << ms.count() << " ms\n";
+    // for(size_t i=0; i<6; i++) {
+    //     std::cout << i << ":" << std::endl << presents[i].print();
+    //     std::cout << " area: " << presents[i].area() << std::endl << std::endl;
+    // }
 
     size_t partA = 0;
     for(const auto& tree : trees) {
-        if(validTree(tree)) ++partA;
+        if(validTree(tree, presents)) ++partA;
     }
 
     std::cout << "Part A: " << partA << std::endl;
